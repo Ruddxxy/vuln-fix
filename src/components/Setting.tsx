@@ -53,6 +53,7 @@ const formSchema = z.object({
   accessPassword: z.string().optional(),
   thinkingModel: z.string(),
   networkingModel: z.string(),
+  searchModel: z.string(),
   language: z.string().optional(),
 });
 
@@ -89,6 +90,7 @@ function Setting({ open, onClose }: SettingProps) {
           accessPassword: state.accessPassword || '',
           thinkingModel: state.thinkingModel || '',
           networkingModel: state.networkingModel || '',
+          searchModel: state.searchModel || 'gemini-2.0-flash-lite',
           language: state.language || 'en-US',
         };
         
@@ -149,12 +151,22 @@ function Setting({ open, onClose }: SettingProps) {
           
           if (!form.getValues("networkingModel")) {
             // Prefer Gemini Pro model if available, or the first available model
-            const defaultModel = result.models.find(model => 
+            const defaultModel = result.models.find(model =>
               model.includes('gemini-pro') || model.includes('pro')
             ) || result.models[0];
             form.setValue("networkingModel", defaultModel);
           }
-          
+
+          if (!form.getValues("searchModel")) {
+            // Prefer flash-lite model for search (highest RPM), fallback to flash
+            const searchModel = result.models.find(model =>
+              model.includes('flash-lite')
+            ) || result.models.find(model =>
+              model.includes('flash')
+            ) || result.models[0];
+            form.setValue("searchModel", searchModel);
+          }
+
           toast.success("Models loaded successfully");
         }
       } else {
@@ -488,6 +500,58 @@ function Setting({ open, onClose }: SettingProps) {
                         />{" "}
                         {t("setting.refresh")}
                       </Button>
+                    </div>
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="searchModel"
+              render={({ field }) => (
+                <FormItem className="from-item">
+                  <FormLabel className="col-span-1">
+                    {t("setting.searchModel")}
+                  </FormLabel>
+                  <FormControl>
+                    <div className="col-span-3 flex flex-col gap-1">
+                      <div className="flex gap-1">
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger
+                            className={cn({ hidden: modelList.length === 0 })}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="max-sm:max-h-72">
+                            {modelList.map((name) => {
+                              return (
+                                <SelectItem key={name} value={name}>
+                                  {convertModelName(name)}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          className={cn("w-full", {
+                            hidden: modelList.length > 0,
+                          })}
+                          type="button"
+                          variant="outline"
+                          onClick={() => fetchModelList()}
+                        >
+                          <RefreshCw
+                            className={isRefreshing ? "animate-spin" : ""}
+                          />{" "}
+                          {t("setting.refresh")}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {t("setting.searchModelDescription")}
+                      </p>
                     </div>
                   </FormControl>
                 </FormItem>

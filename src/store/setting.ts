@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DEFAULT_THINKING_MODEL, DEFAULT_SEARCH_MODEL } from "@/constants/models";
 
 export interface SettingStore {
   apiKey: string;
@@ -7,6 +8,7 @@ export interface SettingStore {
   accessPassword: string;
   thinkingModel: string;
   networkingModel: string;
+  searchModel: string;
   language: string;
 }
 
@@ -18,8 +20,9 @@ export const defaultValues = {
   apiKey: "",
   apiProxy: "https://generativelanguage.googleapis.com",
   accessPassword: "",
-  thinkingModel: "gemini-2.5-flash",
-  networkingModel: "gemini-2.5-flash",
+  thinkingModel: DEFAULT_THINKING_MODEL,
+  networkingModel: DEFAULT_THINKING_MODEL,
+  searchModel: DEFAULT_SEARCH_MODEL,
   language: "",
 };
 

@@ -13,9 +13,14 @@ export interface Source {
 export interface SearchTask {
   state: "unprocessed" | "processing" | "completed";
   query: string;
-  researchGoal: string;
+  researchGoal?: string;
   learning: string;
-  sources: Source[];
+  sources?: Source[];
+  id?: string;
+  url?: string;
+  title?: string;
+  credibilityScore?: number;
+  biasAssessment?: string;
 }
 
 export interface ResearchHistory {

@@ -109,6 +109,8 @@
     "accessPasswordPlaceholder": "Please enter the server access password",
     "thinkingModel": "Thinking Model",
     "networkingModel": "Networking Model",
+    "searchModel": "Search Model",
+    "searchModelDescription": "Model used for parallel web searches (higher RPM = faster)",
     "language": "Language",
     "refresh": "Click Refresh Model",
     "save": "Save",

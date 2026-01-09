@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { streamText, smoothStream } from "ai";
-import { parsePartialJson } from "@ai-sdk/ui-utils";
+import { streamText, streamObject, smoothStream } from "ai";
 import { useTranslation } from "react-i18next";
 import Plimit from "p-limit";
 import { toast } from "sonner";
@@ -24,26 +23,12 @@ import {
   getSERPQuerySchema,
 } from "@/utils/deep-research";
 import { parseError } from "@/utils/error";
-import { pick, flat } from "radash";
-import rateLimiter, { FALLBACK_MODELS } from "@/utils/rate-limiter";
+import { flat } from "radash";
+import rateLimiter, { isRateLimitError } from "@/utils/rate-limiter";
+import { FALLBACK_ORDER } from "@/constants/models";
 
 function getResponseLanguagePrompt(lang: string) {
   return `**Respond in ${lang}**`;
-}
-
-function removeJsonMarkdown(text: string) {
-  text = text.trim();
-  if (text.startsWith("```json")) {
-    text = text.slice(7);
-  } else if (text.startsWith("json")) {
-    text = text.slice(4);
-  } else if (text.startsWith("```")) {
-    text = text.slice(3);
-  }
-  if (text.endsWith("```")) {
-    text = text.slice(0, -3);
-  }
-  return text.trim();
 }
 
 function handleError(error: unknown) {
@@ -51,45 +36,6 @@ function handleError(error: unknown) {
   toast.error(errorMessage);
 }
 
-// Check if error is a rate limit error
-function isRateLimitError(error: unknown): boolean {
-  if (!error) return false;
-
-  if (typeof error === 'object') {
-    const err = error as any;
-
-    // Check for common rate limit indicators
-    if (err.code === 429 || err.status === 429) return true;
-    if (err.code === 503 || err.status === 503) return true;
-    if (err.statusCode === 429 || err.statusCode === 503) return true;
-
-    if (err.error && typeof err.error === 'object') {
-      if (err.error.code === 429 || err.error.status === 429) return true;
-      if (err.error.code === 503 || err.error.status === 503) return true;
-    }
-
-    // Check message content
-    const message = err.message || err.error?.message || '';
-    if (typeof message === 'string') {
-      if (
-        message.includes('rate limit') ||
-        message.includes('too many requests') ||
-        message.includes('overloaded') ||
-        message.includes('quota exceeded') ||
-        message.includes('RESOURCE_EXHAUSTED')
-      ) {
-        return true;
-      }
-    }
-
-    // Check for nested lastError (from AI SDK retry errors)
-    if (err.lastError) {
-      return isRateLimitError(err.lastError);
-    }
-  }
-
-  return false;
-}
 
 // Get the best available model (respecting cooldowns, exhaustion, and known unavailable models)
 function getAvailableModel(preferredModel: string): string {
@@ -120,7 +66,7 @@ function getAvailableModel(preferredModel: string): string {
 
   // If no fallback available, return the first available fallback model
   logger.warn(`No fallback available for ${preferredModel}, using first available fallback`);
-  for (const model of FALLBACK_MODELS) {
+  for (const model of FALLBACK_ORDER) {
     if (!rateLimiter.isInCooldown(model) && !rateLimiter.isModelExhausted(model)) {
       return model;
     }
@@ -396,14 +342,17 @@ function useDeepResearch() {
       // Track the request
       rateLimiter.trackRequest(modelToUse);
 
-      const result = streamText({
+      const querySchema = getSERPQuerySchema();
+
+      // Use streamObject for native structured output (no JSON parsing needed)
+      const { partialObjectStream } = streamObject({
         model: provider(modelToUse),
+        schema: querySchema,
         system: getSystemPrompt(),
         prompt: [
           reviewSerpQueriesPrompt(query, learnings, suggestion),
           getResponseLanguagePrompt(language),
         ].join("\n\n"),
-        experimental_transform: smoothStream(),
         onError: (error) => {
           if (isRateLimitError(error)) {
             rateLimiter.handleRateLimitError(modelToUse, error);
@@ -413,25 +362,18 @@ function useDeepResearch() {
         },
       });
 
-      const querySchema = getSERPQuerySchema();
-      let content = "";
-      let queries = [];
-      for await (const textPart of result.textStream) {
-        content += textPart;
-        const data: PartialJson = parsePartialJson(removeJsonMarkdown(content));
-        if (
-          querySchema.safeParse(data.value) &&
-          data.state === "successful-parse"
-        ) {
-          if (data.value) {
-            queries = data.value.map(
-              (item: { query: string; researchGoal: string }) => ({
-                state: "unprocessed",
-                learning: "",
-                ...pick(item, ["query", "researchGoal"]),
-              })
-            );
-          }
+      let queries: SearchTask[] = [];
+      for await (const partialObject of partialObjectStream) {
+        // partialObject is already validated against the schema
+        if (partialObject && Array.isArray(partialObject)) {
+          queries = partialObject.map(
+            (item: { query?: string; researchGoal?: string }) => ({
+              state: "unprocessed" as const,
+              learning: "",
+              query: item.query || "",
+              researchGoal: item.researchGoal,
+            })
+          );
         }
       }
       if (queries.length > 0) {
@@ -675,7 +617,6 @@ function useDeepResearch() {
 
     setStatus(t("research.common.thinking"));
     try {
-      let queries = [];
       const provider = createProvider("google");
 
       // Extract input type from query
@@ -684,14 +625,17 @@ function useDeepResearch() {
       // Track the request
       rateLimiter.trackRequest(modelToUse);
 
-      const result = streamText({
+      const querySchema = getSERPQuerySchema();
+
+      // Use streamObject for native structured output (no JSON parsing needed)
+      const { partialObjectStream } = streamObject({
         model: provider(modelToUse),
+        schema: querySchema,
         system: getSystemPrompt(),
         prompt: [
           generateJournalisticQueriesPrompt(query, inputType),
           getResponseLanguagePrompt(language),
         ].join("\n\n"),
-        experimental_transform: smoothStream(),
         onError: (error) => {
           if (isRateLimitError(error)) {
             rateLimiter.handleRateLimitError(modelToUse, error);
@@ -701,27 +645,20 @@ function useDeepResearch() {
         },
       });
 
-      const querySchema = getSERPQuerySchema();
-      let content = "";
-      for await (const textPart of result.textStream) {
-        content += textPart;
-        const data: PartialJson = parsePartialJson(removeJsonMarkdown(content));
-        if (querySchema.safeParse(data.value)) {
-          if (
-            data.state === "repaired-parse" ||
-            data.state === "successful-parse"
-          ) {
-            if (data.value) {
-              queries = data.value.map(
-                (item: { query: string; researchGoal: string }) => ({
-                  state: "unprocessed",
-                  learning: "",
-                  ...pick(item, ["query", "researchGoal"]),
-                })
-              );
-              taskStore.update(queries);
-            }
-          }
+      let queries: SearchTask[] = [];
+      for await (const partialObject of partialObjectStream) {
+        // partialObject is already validated against the schema
+        if (partialObject && Array.isArray(partialObject)) {
+          queries = partialObject.map(
+            (item: { query?: string; researchGoal?: string }) => ({
+              state: "unprocessed" as const,
+              learning: "",
+              query: item.query || "",
+              researchGoal: item.researchGoal,
+            })
+          );
+          // Update UI with each partial result
+          taskStore.update(queries);
         }
       }
       await runSearchTask(queries);

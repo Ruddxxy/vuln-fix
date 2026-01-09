@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSettingStore } from "@/store/setting";
 import rateLimiter from "@/utils/rate-limiter";
+import { getModelLimits } from "@/constants/models";
 import { BarChart3, AlertTriangle } from "lucide-react";
 import {
   Card,
@@ -42,8 +43,8 @@ export default function ApiUsageStats() {
   useEffect(() => {
     if (!thinkingModel) return;
 
-    // Get the limits for current model from the rate limiter
-    const limits = rateLimiter.getModelLimits(thinkingModel);
+    // Get the limits for current model from the constants
+    const limits = getModelLimits(thinkingModel);
 
     // Check exhausted, unavailable, and cooldown status
     setIsExhausted(rateLimiter.isModelExhausted(thinkingModel));
@@ -103,9 +104,9 @@ export default function ApiUsageStats() {
     
     // Create a proxy for trackRequest to count requests
     const originalTrackRequest = rateLimiter.trackRequest;
-    rateLimiter.trackRequest = function(model: string, tokens?: number) {
+    rateLimiter.trackRequest = function(model: string) {
       // Call the original method
-      originalTrackRequest.call(rateLimiter, model, tokens);
+      originalTrackRequest.call(rateLimiter, model);
       
       // Update our local counts
       if (!requestCounts[model]) {
