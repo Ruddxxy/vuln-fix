@@ -139,25 +139,36 @@ function AppSidebar() {
         </div>
       </SidebarBody>
 
-      <SidebarFooter className="border-t border-zinc-800 !px-0 !py-3">
-        <SidebarSection className="[&_button]:justify-start [&_a]:justify-start">
-          <SidebarItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-lg">
+      <SidebarFooter className="border-t border-zinc-800 !px-3 !py-3">
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-300 hover:bg-white/5"
+          >
             {theme === 'dark' ? (
-              <Sun data-slot="icon" className="h-4 w-4 text-zinc-400" />
+              <Sun className="h-4 w-4 text-zinc-400" />
             ) : (
-              <Moon data-slot="icon" className="h-4 w-4 text-zinc-400" />
+              <Moon className="h-4 w-4 text-zinc-400" />
             )}
-            <SidebarLabel className="text-zinc-300">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</SidebarLabel>
-          </SidebarItem>
-          <SidebarItem onClick={() => setOpenSetting(true)} className="rounded-lg">
-            <Settings data-slot="icon" className="h-4 w-4 text-zinc-400" />
-            <SidebarLabel className="text-zinc-300">{t("setting.title")}</SidebarLabel>
-          </SidebarItem>
-          <SidebarItem href="https://github.com/CaullenOmdahl/deep-journalist" className="rounded-lg">
-            <Github data-slot="icon" className="h-4 w-4 text-zinc-400" />
-            <SidebarLabel className="text-zinc-300">GitHub</SidebarLabel>
-          </SidebarItem>
-        </SidebarSection>
+            <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+          </button>
+          <button
+            onClick={() => setOpenSetting(true)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-300 hover:bg-white/5"
+          >
+            <Settings className="h-4 w-4 text-zinc-400" />
+            <span>{t("setting.title")}</span>
+          </button>
+          <a
+            href="https://github.com/CaullenOmdahl/deep-journalist"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-300 hover:bg-white/5"
+          >
+            <Github className="h-4 w-4 text-zinc-400" />
+            <span>GitHub</span>
+          </a>
+        </div>
       </SidebarFooter>
     </Sidebar>
   )
