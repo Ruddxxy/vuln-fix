@@ -335,11 +335,17 @@ function useDeepResearch() {
       for await (const part of searchResult.fullStream) {
         if (part.type === "text-delta") {
           // AI SDK v5: textDelta renamed to delta
-          content += (part as StreamTextPart).delta ?? (part as StreamTextPart).textDelta;
-          taskStore.updateTask(item.query, { learning: content });
+          const textContent = (part as StreamTextPart).delta ?? (part as StreamTextPart).textDelta ?? "";
+          if (textContent) {
+            content += textContent;
+            taskStore.updateTask(item.query, { learning: content });
+          }
         } else if (part.type === "reasoning") {
           // AI SDK v5: textDelta renamed to delta
-          logger.info("reasoning", (part as StreamTextPart).delta ?? (part as StreamTextPart).textDelta);
+          const reasoningContent = (part as StreamTextPart).delta ?? (part as StreamTextPart).textDelta ?? "";
+          if (reasoningContent) {
+            logger.info("reasoning", reasoningContent);
+          }
         }
       }
 
