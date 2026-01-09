@@ -98,30 +98,37 @@ function AppSidebar() {
         </SidebarSection>
 
         <div className="mt-6">
-          <SidebarHeading className="px-3 text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">
+          <h3 className="px-3 text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">
             Recent Research
-          </SidebarHeading>
-          <SidebarSection className="[&_button]:justify-start [&_a]:justify-start">
+          </h3>
+          <div className="flex flex-col gap-0.5">
             {recentHistory.length > 0 ? (
               recentHistory.map(([id, item]) => (
-                <SidebarItem key={id} onClick={() => handleLoadHistory(id)} className="rounded-lg">
-                  <FileText data-slot="icon" className="h-4 w-4 text-zinc-400" />
-                  <SidebarLabel className="text-zinc-300">
+                <button
+                  key={id}
+                  onClick={() => handleLoadHistory(id)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-300 hover:bg-white/5"
+                >
+                  <FileText className="h-4 w-4 text-zinc-400" />
+                  <span className="truncate">
                     {item.question?.slice(0, 28) || "Untitled"}
                     {(item.question?.length || 0) > 28 ? "..." : ""}
-                  </SidebarLabel>
-                </SidebarItem>
+                  </span>
+                </button>
               ))
             ) : (
               <p className="px-3 py-2 text-sm text-zinc-500">
                 No recent research
               </p>
             )}
-            <SidebarItem onClick={() => setOpenHistory(true)} className="rounded-lg">
-              <History data-slot="icon" className="h-4 w-4 text-zinc-400" />
-              <SidebarLabel className="text-zinc-300">View All History</SidebarLabel>
-            </SidebarItem>
-          </SidebarSection>
+            <button
+              onClick={() => setOpenHistory(true)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-zinc-300 hover:bg-white/5"
+            >
+              <History className="h-4 w-4 text-zinc-400" />
+              <span>View All History</span>
+            </button>
+          </div>
         </div>
 
         <SidebarSpacer />
