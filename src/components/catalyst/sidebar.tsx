@@ -52,7 +52,7 @@ export function SidebarSection({ className, ...props }: React.ComponentPropsWith
 
   return (
     <LayoutGroup id={id}>
-      <div {...props} data-slot="section" className={clsx(className, 'flex flex-col gap-0.5')} />
+      <div {...props} data-slot="section" className={clsx(className, 'flex flex-col items-stretch gap-0.5')} />
     </LayoutGroup>
   )
 }
@@ -98,7 +98,7 @@ export const SidebarItem = forwardRef(function SidebarItem(
   )
 
   return (
-    <span className={clsx(className, 'relative block')}>
+    <span className={clsx(className, 'relative block w-full')}>
       {current && (
         <motion.span
           layoutId="current-indicator"
