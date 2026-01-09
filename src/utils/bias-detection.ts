@@ -51,7 +51,7 @@ export interface BiasedPhrase {
 /**
  * Database of potentially loaded terms with neutral alternatives
  */
-const LOADED_TERMS: Record<string, {
+export const LOADED_TERMS: Record<string, {
   alternatives: string[];
   type: BiasType;
   explanation: string;

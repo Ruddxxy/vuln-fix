@@ -1,6 +1,32 @@
 import { z } from "zod";
 import zodToJsonSchema from "zod-to-json-schema";
 
+// Helper to convert Zod schema to formatted JSON string
+function schemaToJsonString(schema: z.ZodType): string {
+  return JSON.stringify(zodToJsonSchema(schema), null, 4);
+}
+
+interface PromptConfig {
+  systemContext: string;
+  userInstructions: string;
+  outputSchema?: z.ZodType;
+  includeLanguage?: boolean;
+}
+
+function buildPrompt(config: PromptConfig, language?: string): string {
+  const parts: string[] = [config.systemContext, config.userInstructions];
+  
+  if (config.outputSchema) {
+    parts.push(`\n\n<output_format>\nRespond in JSON:\n${schemaToJsonString(config.outputSchema)}\n</output_format>`);
+  }
+  
+  if (config.includeLanguage && language) {
+    parts.push(`\n\nIMPORTANT: Respond in ${language}.`);
+  }
+  
+  return parts.join('\n\n');
+}
+
 export function getSystemPrompt() {
   const now = new Date().toISOString();
   return `You are an expert journalist with deep research skills. Today is ${now}. Follow these instructions when responding:
@@ -162,11 +188,7 @@ export function generateQuestionsPrompt(query: string) {
 
 export function generateJournalisticQueriesPrompt(query: string, inputType: string) {
   const SERPQuerySchema = getSERPQuerySchema();
-  const outputSchema = JSON.stringify(
-    zodToJsonSchema(SERPQuerySchema),
-    null,
-    4
-  );
+  const outputSchema = schemaToJsonString(SERPQuerySchema);
 
   const isUrl = inputType === 'url';
   
@@ -186,11 +208,7 @@ export function generateJournalisticQueriesPrompt(query: string, inputType: stri
 
 export function generateSerpQueriesPrompt(query: string) {
   const SERPQuerySchema = getSERPQuerySchema();
-  const outputSchema = JSON.stringify(
-    zodToJsonSchema(SERPQuerySchema),
-    null,
-    4
-  );
+  const outputSchema = schemaToJsonString(SERPQuerySchema);
 
   return [
     `Given the following query from the user:\n<query>${query}</query>`,
@@ -218,11 +236,7 @@ Make sure each finding is unique, detailed, and information-dense. Include relev
 
 export function processJournalisticSearchResultPrompt(query: string, researchGoal: string) {
   const SourceSchema = getSourceSchema();
-  const outputSchema = JSON.stringify(
-    zodToJsonSchema(SourceSchema),
-    null,
-    4
-  );
+  const outputSchema = schemaToJsonString(SourceSchema);
 
   return [
     `Please use the following query to get the latest information via google search tool:\n<query>${query}</query>`,
@@ -247,11 +261,7 @@ export function reviewSerpQueriesPrompt(
   suggestion: string
 ) {
   const SERPQuerySchema = getSERPQuerySchema();
-  const outputSchema = JSON.stringify(
-    zodToJsonSchema(SERPQuerySchema),
-    null,
-    4
-  );
+  const outputSchema = schemaToJsonString(SERPQuerySchema);
   const learningsString = learnings
     .map((learning) => `<learning>\n${learning}\n</learning>`)
     .join("\n");
@@ -339,3 +349,6 @@ export function writeJournalisticArticlePrompt(query: string, learnings: string[
     `**DO NOT** output anything other than the journalistic article itself.`,
   ].join("\n\n");
 }
+
+// Export the helper functions for potential use in other modules
+export { schemaToJsonString, buildPrompt, type PromptConfig };

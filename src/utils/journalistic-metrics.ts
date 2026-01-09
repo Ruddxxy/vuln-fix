@@ -8,6 +8,7 @@
 import { SearchTask } from "@/types";
 import { assessDomainReputation } from "@/utils/domain-reputation";
 import { extractDomainFromUrl } from "@/utils/url-extractor";
+import { LOADED_TERMS } from "./bias-detection";
 
 /**
  * Categories of journalistic standards to evaluate
@@ -271,10 +272,7 @@ function evaluateFairness(
   }
   
   // Check for loaded language
-  const loadedTerms = [
-    'radical', 'extremist', 'fanatical', 'admitted', 'refused', 'claimed',
-    'slammed', 'blasted', 'catastrophic', 'disastrous', 'regime'
-  ];
+  const loadedTerms = Object.keys(LOADED_TERMS); // Consolidated from bias-detection.ts
   
   const loadedLanguageMatches = loadedTerms.flatMap(term => {
     const regex = new RegExp(`\\b${term}\\b`, 'gi');

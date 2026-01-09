@@ -31,6 +31,36 @@ import { detectBias } from "@/utils/bias-detection";
 import { triangulateClaims } from "@/utils/source-triangulation";
 import { getCachedResult, setCachedResult } from "@/utils/research-cache";
 
+// Type definitions for AI SDK stream parts
+interface StreamTextPart {
+  type: string;
+  delta?: string;
+  textDelta?: string;
+}
+
+interface StreamResponseWithMetadata {
+  providerMetadata?: {
+    google?: {
+      groundingMetadata?: {
+        groundingChunks?: Array<{
+          web?: { uri?: string; title?: string };
+        }>;
+        webSearchQueries?: string[];
+      };
+    };
+  };
+  experimental_providerMetadata?: {
+    google?: {
+      groundingMetadata?: {
+        groundingChunks?: Array<{
+          web?: { uri?: string; title?: string };
+        }>;
+        webSearchQueries?: string[];
+      };
+    };
+  };
+}
+
 function getResponseLanguagePrompt(lang: string) {
   return `**Respond in ${lang}**`;
 }
@@ -123,6 +153,16 @@ function useDeepResearch() {
   const { createProvider } = useModelProvider();
   const [status, setStatus] = useState<string>("");
 
+  // Unified API error handler
+  function handleApiError(error: unknown, model: string, onError?: () => void) {
+    if (isRateLimitError(error)) {
+      rateLimiter.handleRateLimitError(model, error);
+    } else {
+      handleError(error);
+    }
+    onError?.();
+  }
+
   // Check for model cooldown and display message if needed
   const checkModelCooldown = (model: string): boolean => {
     if (rateLimiter.isInCooldown(model)) {
@@ -191,12 +231,7 @@ function useDeepResearch() {
         experimental_transform: smoothStream(),
         onError: (error) => {
           logger.error("Error in streamText during askQuestions:", error);
-          if (isRateLimitError(error)) {
-            logger.info("Rate limit error detected, handling rate limit");
-            rateLimiter.handleRateLimitError(modelToUse, error);
-          } else {
-            handleError(error);
-          }
+          handleApiError(error, modelToUse);
         },
       });
 
@@ -213,11 +248,7 @@ function useDeepResearch() {
 
     } catch (error) {
       logger.error("Error in askQuestions:", error);
-      if (isRateLimitError(error)) {
-        rateLimiter.handleRateLimitError(modelToUse, error);
-      } else {
-        handleError(error);
-      }
+      handleApiError(error, modelToUse);
     }
   }
 
@@ -294,24 +325,24 @@ function useDeepResearch() {
         ].join("\n\n"),
         experimental_transform: smoothStream(),
         onError: (error: unknown) => {
-          if (isRateLimitError(error)) {
-            rateLimiter.handleRateLimitError(searchModel, error);
-            taskStore.updateTask(item.query, { state: "unprocessed", learning: "Rate limit exceeded. Will retry automatically." });
-          } else {
-            handleError(error);
-            taskStore.updateTask(item.query, { state: "unprocessed" });
-          }
+          handleApiError(error, searchModel, () => {
+            if (isRateLimitError(error)) {
+              taskStore.updateTask(item.query, { state: "unprocessed", learning: "Rate limit exceeded. Will retry automatically." });
+            } else {
+              taskStore.updateTask(item.query, { state: "unprocessed" });
+            }
+          });
         },
       });
 
       for await (const part of searchResult.fullStream) {
         if (part.type === "text-delta") {
           // AI SDK v5: textDelta renamed to delta
-          content += (part as any).delta ?? (part as any).textDelta;
+          content += (part as StreamTextPart).delta ?? (part as StreamTextPart).textDelta;
           taskStore.updateTask(item.query, { learning: content });
         } else if (part.type === "reasoning") {
           // AI SDK v5: textDelta renamed to delta
-          logger.info("reasoning", (part as any).delta ?? (part as any).textDelta);
+          logger.info("reasoning", (part as StreamTextPart).delta ?? (part as StreamTextPart).textDelta);
         }
       }
 
@@ -319,7 +350,7 @@ function useDeepResearch() {
       // Gemini 2.5+ with search grounding returns sources in providerMetadata, not as stream events
       try {
         const response = await searchResult.response;
-        const providerMetadata = (response as any).providerMetadata || (response as any).experimental_providerMetadata;
+        const providerMetadata = (response as StreamResponseWithMetadata).providerMetadata || (response as StreamResponseWithMetadata).experimental_providerMetadata;
         const groundingMetadata = providerMetadata?.google?.groundingMetadata;
 
         if (groundingMetadata?.groundingChunks) {
@@ -362,16 +393,16 @@ function useDeepResearch() {
       }
       taskStore.updateTask(item.query, { state: "completed", sources: processedSources });
     } catch (error) {
-      if (isRateLimitError(error)) {
-        rateLimiter.handleRateLimitError(searchModel, error);
-        taskStore.updateTask(item.query, {
-          state: "unprocessed",
-          learning: content || "Rate limit exceeded. Will retry automatically."
-        });
-      } else {
-        handleError(error);
-        taskStore.updateTask(item.query, { state: "unprocessed" });
-      }
+      handleApiError(error, searchModel, () => {
+        if (isRateLimitError(error)) {
+          taskStore.updateTask(item.query, {
+            state: "unprocessed",
+            learning: content || "Rate limit exceeded. Will retry automatically."
+          });
+        } else {
+          taskStore.updateTask(item.query, { state: "unprocessed" });
+        }
+      });
     }
 
     return content;
@@ -413,11 +444,7 @@ function useDeepResearch() {
           getResponseLanguagePrompt(language),
         ].join("\n\n"),
         onError: (error) => {
-          if (isRateLimitError(error)) {
-            rateLimiter.handleRateLimitError(modelToUse, error);
-          } else {
-            handleError(error);
-          }
+          handleApiError(error, modelToUse);
         },
       });
 
@@ -447,11 +474,7 @@ function useDeepResearch() {
         await reviewSearchResult(currentDepth + 1);
       }
     } catch (error) {
-      if (isRateLimitError(error)) {
-        rateLimiter.handleRateLimitError(modelToUse, error);
-      } else {
-        handleError(error);
-      }
+      handleApiError(error, modelToUse);
     }
   }
 
@@ -760,11 +783,7 @@ function useDeepResearch() {
           getResponseLanguagePrompt(language),
         ].join("\n\n"),
         onError: (error) => {
-          if (isRateLimitError(error)) {
-            rateLimiter.handleRateLimitError(modelToUse, error);
-          } else {
-            handleError(error);
-          }
+          handleApiError(error, modelToUse);
         },
       });
 
@@ -791,11 +810,9 @@ function useDeepResearch() {
       
       await runSearchTask(uniqueQueries);
     } catch (error) {
-      if (isRateLimitError(error)) {
-        rateLimiter.handleRateLimitError(modelToUse, error);
-      } else {
+      handleApiError(error, modelToUse, () => {
         logger.error(error);
-      }
+      });
     }
   }
 

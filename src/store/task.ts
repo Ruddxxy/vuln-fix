@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { pick } from "radash";
+import logger from "@/utils/logger";
 
 export interface TaskStore {
   id: string;
@@ -69,29 +70,13 @@ export const useTaskStore = create(
       setSuggestion: (suggestion) => set(() => ({ suggestion })),
       setQuery: (query) => set(() => ({ query })),
       updateTask: (query, task) => {
-        console.log(`Updating task ${query} with:`, task);
-        if (task.sources) {
-          console.log(`Task ${query} updating with ${task.sources.length} sources`);
-        }
+        logger.debug(`Updating task "${query}" with ${task.sources?.length ?? 0} sources, state: ${task.state ?? 'unchanged'}`);
         
         const newTasks = get().tasks.map((item) => {
           return item.query === query ? { ...item, ...task } : item;
         });
         
-        set(() => {
-          console.log(`Setting tasks to ${newTasks.length} tasks`);
-          return { tasks: [...newTasks] };
-        });
-        
-        // Log the task after update to verify sources are set correctly
-        const updatedTask = get().tasks.find(t => t.query === query);
-        if (updatedTask) {
-          console.log(`Task ${query} after update:`, {
-            query: updatedTask.query,
-            sourcesCount: updatedTask.sources?.length || 0,
-            state: updatedTask.state
-          });
-        }
+        set(() => ({ tasks: [...newTasks] }));
       },
       removeTask: (query) => {
         set((state) => ({
@@ -103,11 +88,8 @@ export const useTaskStore = create(
       updateQuestions: (questions) => set(() => ({ questions })),
       updateFinalReport: (report) => set(() => ({ finalReport: report })),
       setSources: (sources) => {
-        console.log(`Setting global sources array with ${sources.length} sources`);
+        logger.debug(`Setting global sources array with ${sources.length} sources`);
         set(() => ({ sources }));
-        
-        // Log the sources after update
-        console.log("Global sources after update:", get().sources.length);
       },
       setFeedback: (feedback) => set(() => ({ feedback })),
       setArticleType: (articleType) => set(() => ({ articleType })),
