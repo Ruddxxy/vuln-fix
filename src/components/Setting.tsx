@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Check, AlertTriangle, Loader2, Eye, EyeOff } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import useModel from "@/hooks/useModel";
 import { useSettingStore } from "@/store/setting";
@@ -39,6 +40,7 @@ import { omit, capitalize } from "radash";
 import ApiUsageStats from "./ApiUsageStats";
 import { validateGoogleApiKey } from "@/utils/api-validation";
 import { toast } from "sonner";
+import { clearCache, getCacheStats } from "@/utils/research-cache";
 
 type SettingProps = {
   open: boolean;
@@ -77,6 +79,7 @@ function Setting({ open, onClose }: SettingProps) {
   }>({ status: 'idle', message: '' });
   const [formReady, setFormReady] = useState<boolean>(false);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [cacheStats, setCacheStats] = useState<{ count: number; oldestEntry: number | null } | null>(null);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -105,6 +108,13 @@ function Setting({ open, onClose }: SettingProps) {
   });
 
   const watchApiKey = form.watch("apiKey");
+
+  // Load cache stats on mount
+  useEffect(() => {
+    if (open) {
+      getCacheStats().then(setCacheStats);
+    }
+  }, [open]);
 
   function handleClose(open: boolean) {
     if (!open) onClose();
@@ -613,6 +623,34 @@ function Setting({ open, onClose }: SettingProps) {
                 </FormItem>
               )}
             />
+
+            {/* Research Cache Section */}
+            <div className="space-y-2">
+              <Label>Research Cache</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {cacheStats ? `${cacheStats.count} cached queries` : "Loading..."}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await clearCache();
+                    setCacheStats({ count: 0, oldestEntry: null });
+                    toast.success("Research cache cleared");
+                  }}
+                  disabled={cacheStats?.count === 0}
+                >
+                  Clear Cache
+                </Button>
+              </div>
+              {cacheStats?.oldestEntry && (
+                <p className="text-xs text-muted-foreground">
+                  Oldest entry: {new Date(cacheStats.oldestEntry).toLocaleDateString()}
+                </p>
+              )}
+            </div>
           </form>
         </Form>
         <DialogFooter className="mt-2 flex-row sm:justify-between sm:space-x-0 gap-3">

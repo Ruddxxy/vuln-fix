@@ -25,10 +25,11 @@ import {
 import { parseError } from "@/utils/error";
 import { flat } from "radash";
 import rateLimiter, { isRateLimitError } from "@/utils/rate-limiter";
-import { FALLBACK_ORDER } from "@/constants/models";
+import { FALLBACK_ORDER, getOptimalConcurrency, getStaggerDelay } from "@/constants/models";
 import { buildTimeline } from "@/utils/timeline-builder";
 import { detectBias } from "@/utils/bias-detection";
 import { triangulateClaims } from "@/utils/source-triangulation";
+import { getCachedResult, setCachedResult } from "@/utils/research-cache";
 
 function getResponseLanguagePrompt(lang: string) {
   return `**Respond in ${lang}**`;
@@ -82,6 +83,38 @@ function getAvailableModel(preferredModel: string): string {
 // Sleep helper for retry delays
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Query normalization for deduplication
+function normalizeQuery(query: string): string {
+  return query
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s]/g, '') // Remove punctuation
+    .replace(/\s+/g, ' ');   // Normalize whitespace
+}
+
+// Deduplicate queries to reduce redundant API calls
+function deduplicateQueries(queries: SearchTask[]): SearchTask[] {
+  const seen = new Set<string>();
+  const originalCount = queries.length;
+  
+  const uniqueQueries = queries.filter(q => {
+    const fingerprint = normalizeQuery(q.query);
+    if (seen.has(fingerprint)) {
+      logger.info(`Skipping duplicate query: "${q.query}"`);
+      return false;
+    }
+    seen.add(fingerprint);
+    return true;
+  });
+  
+  const deduplicatedCount = originalCount - uniqueQueries.length;
+  if (deduplicatedCount > 0) {
+    logger.info(`Deduplicated ${deduplicatedCount} queries (${originalCount} -> ${uniqueQueries.length})`);
+  }
+  
+  return uniqueQueries;
 }
 
 function useDeepResearch() {
@@ -192,19 +225,22 @@ function useDeepResearch() {
     const { language, networkingModel } = useSettingStore.getState();
     setStatus(t("research.common.research"));
 
-    // Parallel execution with staggered starts to avoid rate limit bursts
-    // Concurrency of 3 balances speed vs rate limits for most API tiers
-    const CONCURRENCY = 3;
-    const STAGGER_DELAY_MS = 500; // Delay between starting each request
+    // Deduplicate queries before processing
+    const uniqueQueries = deduplicateQueries(queries);
 
-    const plimit = Plimit(CONCURRENCY);
     // Use the configured networking model with fallback support
     const searchModel = getAvailableModel(networkingModel || "gemini-2.5-flash");
 
-    logger.info(`Starting ${queries.length} search tasks with concurrency ${CONCURRENCY}, using model: ${searchModel}`);
+    // Dynamic parallel execution based on model RPM limits
+    const CONCURRENCY = getOptimalConcurrency(searchModel);
+    const STAGGER_DELAY_MS = getStaggerDelay(searchModel);
+
+    const plimit = Plimit(CONCURRENCY);
+
+    logger.info(`Starting ${uniqueQueries.length} search tasks with concurrency ${CONCURRENCY}, stagger delay ${STAGGER_DELAY_MS}ms, using model: ${searchModel}`);
 
     // Create all tasks with staggered starts
-    const taskPromises = queries.map((item, index) => {
+    const taskPromises = uniqueQueries.map((item, index) => {
       return plimit(async () => {
         // Stagger the start of each request to avoid burst rate limiting
         if (index > 0) {
@@ -228,6 +264,15 @@ function useDeepResearch() {
     if (checkModelCooldown(searchModel)) {
       taskStore.updateTask(item.query, { state: "unprocessed", learning: "Rate limit exceeded. Try again later." });
       return "";
+    }
+
+    // Check cache first before making API call
+    const cacheKey = item.query;
+    const cachedLearning = await getCachedResult<string>(cacheKey);
+    if (cachedLearning) {
+      logger.info(`Using cached result for: "${item.query.substring(0, 50)}..."`);
+      taskStore.updateTask(item.query, { state: "completed", learning: cachedLearning });
+      return cachedLearning;
     }
 
     let content = "";
@@ -310,6 +355,11 @@ function useDeepResearch() {
         return source;
       });
 
+
+      // Cache the successful result
+      if (content) {
+        await setCachedResult(item.query, content);
+      }
       taskStore.updateTask(item.query, { state: "completed", sources: processedSources });
     } catch (error) {
       if (isRateLimitError(error)) {
@@ -386,8 +436,11 @@ function useDeepResearch() {
         }
       }
       if (queries.length > 0) {
-        taskStore.update([...tasks, ...queries]);
-        await runSearchTask(queries);
+        // Deduplicate generated queries before adding to tasks
+        const uniqueQueries = deduplicateQueries(queries);
+        
+        taskStore.update([...tasks, ...uniqueQueries]);
+        await runSearchTask(uniqueQueries);
 
         // Recursive call for deeper research
         logger.info(`Completed research depth ${currentDepth + 1}, continuing to depth ${currentDepth + 2}`);
@@ -731,7 +784,12 @@ function useDeepResearch() {
           taskStore.update(queries);
         }
       }
-      await runSearchTask(queries);
+      
+      // Deduplicate initial queries before running search tasks
+      const uniqueQueries = deduplicateQueries(queries);
+      taskStore.update(uniqueQueries);
+      
+      await runSearchTask(uniqueQueries);
     } catch (error) {
       if (isRateLimitError(error)) {
         rateLimiter.handleRateLimitError(modelToUse, error);
