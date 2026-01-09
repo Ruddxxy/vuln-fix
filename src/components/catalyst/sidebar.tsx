@@ -28,8 +28,8 @@ export function SidebarBody({ className, ...props }: React.ComponentPropsWithout
     <div
       {...props}
       className={clsx(
-        className,
-        'flex flex-1 flex-col overflow-y-auto p-4 [&>[data-slot=section]+[data-slot=section]]:mt-8'
+        'flex flex-1 flex-col overflow-y-auto [&>[data-slot=section]+[data-slot=section]]:mt-8',
+        className
       )}
     />
   )
@@ -40,8 +40,8 @@ export function SidebarFooter({ className, ...props }: React.ComponentPropsWitho
     <div
       {...props}
       className={clsx(
-        className,
-        'flex flex-col border-t border-zinc-950/5 p-4 dark:border-white/5 [&>[data-slot=section]+[data-slot=section]]:mt-2.5'
+        'flex flex-col dark:border-white/5 [&>[data-slot=section]+[data-slot=section]]:mt-2.5',
+        className
       )}
     />
   )
