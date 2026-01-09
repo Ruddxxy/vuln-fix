@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { streamText, streamObject, smoothStream } from "ai";
+import { google } from "@ai-sdk/google";
 import { useTranslation } from "react-i18next";
 import Plimit from "p-limit";
 import { toast } from "sonner";
@@ -33,6 +34,16 @@ interface StreamTextPart {
   type: string;
   delta?: string;
   textDelta?: string;
+}
+
+// Source stream part for URL sources from Google Search
+interface StreamSourcePart {
+  type: 'source';
+  sourceType: 'url';
+  id: string;
+  url: string;
+  title?: string;
+  providerMetadata?: Record<string, unknown>;
 }
 
 interface StreamResponseWithMetadata {
@@ -314,12 +325,16 @@ function useDeepResearch() {
       logger.info(`Processing search task: ${item.query}`);
 
       const searchResult = streamText({
-        model: provider(searchModel, { useSearchGrounding: true }),
+        model: provider(searchModel),
         system: getSystemPrompt(),
         prompt: [
           processJournalisticSearchResultPrompt(item.query, item.researchGoal),
           getResponseLanguagePrompt(language),
         ].join("\n\n"),
+        // Use the modern Google Search tool instead of legacy useSearchGrounding
+        tools: {
+          google_search: google.tools.googleSearch({}),
+        },
         experimental_transform: smoothStream(),
         onError: (error: unknown) => {
           handleApiError(error, searchModel, () => {
@@ -346,34 +361,50 @@ function useDeepResearch() {
           if (reasoningContent) {
             logger.info("reasoning", reasoningContent);
           }
+        } else if (part.type === "source") {
+          // Capture URL sources from Google Search grounding
+          const sourcePart = part as StreamSourcePart;
+          if (sourcePart.sourceType === "url" && sourcePart.url) {
+            const source: Source = {
+              url: sourcePart.url,
+              title: sourcePart.title || new URL(sourcePart.url).hostname,
+              sourceType: "secondary",
+              id: sourcePart.id || `source-${Date.now()}-${sources.length + 1}`
+            };
+            sources.push(source);
+            logger.info(`Found source: ${source.title} (${source.url})`);
+          }
         }
       }
 
-      // After stream completes, extract sources from grounding metadata
-      // Gemini 2.5+ with search grounding returns sources in providerMetadata, not as stream events
+      // Fallback: Try to extract additional sources from grounding metadata if available
+      // With the modern google.tools.googleSearch(), sources should come through the stream,
+      // but we keep this as a fallback for compatibility
       try {
         const response = await searchResult.response;
-        const providerMetadata = (response as StreamResponseWithMetadata).providerMetadata || (response as StreamResponseWithMetadata).experimental_providerMetadata;
+        const providerMetadata = (response as StreamResponseWithMetadata).providerMetadata ||
+                                 (response as StreamResponseWithMetadata).experimental_providerMetadata;
         const groundingMetadata = providerMetadata?.google?.groundingMetadata;
 
-        if (groundingMetadata?.groundingChunks) {
-          logger.info(`Found ${groundingMetadata.groundingChunks.length} grounding chunks`);
-
+        if (groundingMetadata?.groundingChunks && sources.length === 0) {
+          // Only use grounding chunks if no sources were captured from the stream
           for (const chunk of groundingMetadata.groundingChunks) {
             if (chunk.web && chunk.web.uri) {
-              const source: Source = {
-                url: chunk.web.uri,
-                title: chunk.web.title || new URL(chunk.web.uri).hostname,
-                sourceType: "secondary",
-                id: `source-${Date.now()}-${sources.length + 1}`
-              };
-              sources.push(source);
+              const existingUrls = sources.map(s => s.url);
+              if (!existingUrls.includes(chunk.web.uri)) {
+                const source: Source = {
+                  url: chunk.web.uri,
+                  title: chunk.web.title || new URL(chunk.web.uri).hostname,
+                  sourceType: "secondary",
+                  id: `source-${Date.now()}-${sources.length + 1}`
+                };
+                sources.push(source);
+              }
             }
           }
-
-          logger.info(`Extracted ${sources.length} sources from grounding metadata`);
-        } else {
-          logger.info("No grounding metadata found in response");
+          if (sources.length > 0) {
+            logger.info(`Extracted ${sources.length} sources from grounding metadata fallback`);
+          }
         }
       } catch (metadataError) {
         logger.error("Error extracting grounding metadata:", metadataError);
