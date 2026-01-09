@@ -89,7 +89,7 @@ function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarBody className="!px-3 !py-4">
+      <SidebarBody className="!px-0 !py-4">
         <SidebarSection>
           <SidebarItem onClick={handleNewResearch} className="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">
             <Plus data-slot="icon" className="h-4 w-4 text-white" />
@@ -139,7 +139,7 @@ function AppSidebar() {
         </div>
       </SidebarBody>
 
-      <SidebarFooter className="border-t border-zinc-800 !px-3 !py-3">
+      <SidebarFooter className="border-t border-zinc-800 !px-0 !py-3">
         <SidebarSection className="[&_button]:justify-start [&_a]:justify-start">
           <SidebarItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-lg">
             {theme === 'dark' ? (
