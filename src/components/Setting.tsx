@@ -1,7 +1,14 @@
 "use client";
-import { useLayoutEffect, useState, useEffect } from "react";
+import { useLayoutEffect, useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Check, AlertTriangle, Loader2, Eye, EyeOff } from "lucide-react";
+import { RefreshCw, Check, AlertTriangle, Loader2, Eye, EyeOff, LogIn, LogOut, User } from "lucide-react";
+import {
+  getAuthState,
+  initiateOAuthFlow,
+  handleOAuthCallback,
+  signOut as oauthSignOut,
+  OAuthState,
+} from "@/utils/google-oauth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -53,6 +60,7 @@ const formSchema = z.object({
   apiKey: z.string().optional(),
   apiProxy: z.string().optional(),
   accessPassword: z.string().optional(),
+  authMethod: z.enum(['api-key', 'gemini-cli']),
   thinkingModel: z.string(),
   networkingModel: z.string(),
   searchModel: z.string(),
@@ -80,6 +88,9 @@ function Setting({ open, onClose }: SettingProps) {
   const [formReady, setFormReady] = useState<boolean>(false);
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [cacheStats, setCacheStats] = useState<{ count: number; oldestEntry: number | null } | null>(null);
+  const [oauthState, setOAuthState] = useState<OAuthState>({ isAuthenticated: false });
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [oauthClientId, setOAuthClientId] = useState<string>('');
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -92,6 +103,7 @@ function Setting({ open, onClose }: SettingProps) {
           apiKey: state.apiKey || '',
           apiProxy: state.apiProxy || 'https://generativelanguage.googleapis.com', // Set default API endpoint
           accessPassword: state.accessPassword || '',
+          authMethod: (state as { authMethod?: string }).authMethod || 'api-key',
           thinkingModel: state.thinkingModel || '',
           networkingModel: state.networkingModel || '',
           searchModel: state.searchModel || 'gemini-2.0-flash-lite',
@@ -108,6 +120,7 @@ function Setting({ open, onClose }: SettingProps) {
   });
 
   const watchApiKey = form.watch("apiKey");
+  const watchAuthMethod = form.watch("authMethod");
 
   // Load cache stats on mount
   useEffect(() => {
@@ -115,6 +128,90 @@ function Setting({ open, onClose }: SettingProps) {
       getCacheStats().then(setCacheStats);
     }
   }, [open]);
+
+  // Check OAuth state on mount and when dialog opens
+  useEffect(() => {
+    if (open) {
+      setOAuthState(getAuthState());
+    }
+  }, [open]);
+
+  // Listen for OAuth callback messages from popup window
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+
+      if (event.data?.type === 'GOOGLE_OAUTH_CALLBACK') {
+        try {
+          setIsSigningIn(true);
+          await handleOAuthCallback(event.data.code, event.data.state);
+          setOAuthState(getAuthState());
+          toast.success("Successfully signed in with Google!");
+        } catch (error) {
+          console.error('OAuth callback error:', error);
+          toast.error(error instanceof Error ? error.message : 'Failed to complete sign-in');
+        } finally {
+          setIsSigningIn(false);
+        }
+      } else if (event.data?.type === 'GOOGLE_OAUTH_ERROR') {
+        toast.error(event.data.error || 'OAuth authentication failed');
+        setIsSigningIn(false);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Check for OAuth callback in URL (for same-window flow)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('oauth_code');
+    const state = params.get('oauth_state');
+
+    if (code && state) {
+      // Clean up URL
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+
+      // Handle the callback
+      setIsSigningIn(true);
+      handleOAuthCallback(code, state)
+        .then(() => {
+          setOAuthState(getAuthState());
+          toast.success("Successfully signed in with Google!");
+        })
+        .catch((error) => {
+          console.error('OAuth callback error:', error);
+          toast.error(error instanceof Error ? error.message : 'Failed to complete sign-in');
+        })
+        .finally(() => {
+          setIsSigningIn(false);
+        });
+    }
+  }, []);
+
+  const handleGoogleSignIn = useCallback(async () => {
+    if (!oauthClientId) {
+      toast.error("Please enter your Google OAuth Client ID first");
+      return;
+    }
+
+    try {
+      setIsSigningIn(true);
+      await initiateOAuthFlow(oauthClientId);
+    } catch (error) {
+      console.error('OAuth error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to initiate sign-in');
+      setIsSigningIn(false);
+    }
+  }, [oauthClientId]);
+
+  const handleGoogleSignOut = useCallback(() => {
+    oauthSignOut();
+    setOAuthState({ isAuthenticated: false });
+    toast.success("Signed out from Google");
+  }, []);
 
   function handleClose(open: boolean) {
     if (!open) onClose();
@@ -308,82 +405,189 @@ function Setting({ open, onClose }: SettingProps) {
               <TabsContent className="space-y-4" value="local">
                 <FormField
                   control={form.control}
-                  name="apiKey"
+                  name="authMethod"
                   render={({ field }) => (
                     <FormItem className="from-item">
                       <FormLabel className="col-span-1">
-                        {t("setting.apiKeyLabel")}
-                        <span className="ml-1 text-red-500">*</span>
+                        Authentication Method
                       </FormLabel>
-                      <div className="flex gap-2 items-center">
-                        <div className="flex-1 relative">
-                          <FormControl>
+                      <FormControl>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="col-span-3">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="api-key">
+                              API Key (Standard limits: 5 RPM, 20 RPD)
+                            </SelectItem>
+                            <SelectItem value="gemini-cli">
+                              Google Account / Gemini CLI (Higher limits: 60 RPM, 1000 RPD)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      {field.value === 'gemini-cli' && (
+                        <div className="mt-3 space-y-3">
+                          {oauthState.isAuthenticated ? (
+                            <Alert className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800">
+                              <AlertDescription className="text-xs flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4" />
+                                  <span>Signed in as <strong>{oauthState.userEmail || 'Google User'}</strong></span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={handleGoogleSignOut}
+                                  className="h-7 px-2 text-green-700 hover:text-green-800 hover:bg-green-100 dark:text-green-200 dark:hover:bg-green-900"
+                                >
+                                  <LogOut className="h-3 w-3 mr-1" />
+                                  Sign Out
+                                </Button>
+                              </AlertDescription>
+                            </Alert>
+                          ) : (
+                            <>
+                              <Alert className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800">
+                                <AlertDescription className="text-xs">
+                                  <strong>Google OAuth Mode:</strong> Sign in with your Google account to get 50x higher rate limits (60 RPM, 1000 RPD vs 5 RPM, 20 RPD).
+                                </AlertDescription>
+                              </Alert>
+
+                              <div className="space-y-2">
+                                <Label className="text-xs">
+                                  Google OAuth Client ID
+                                  <span className="ml-1 text-red-500">*</span>
+                                </Label>
+                                <Input
+                                  type="text"
+                                  placeholder="Enter your OAuth Client ID from Google Cloud Console"
+                                  value={oauthClientId}
+                                  onChange={(e) => setOAuthClientId(e.target.value)}
+                                  className="text-xs"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Create one at{' '}
+                                  <a
+                                    href="https://console.cloud.google.com/apis/credentials"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-500 hover:underline"
+                                  >
+                                    Google Cloud Console
+                                  </a>
+                                  {' '}→ Create OAuth client ID → Web application
+                                </p>
+                              </div>
+
+                              <Button
+                                type="button"
+                                onClick={handleGoogleSignIn}
+                                disabled={isSigningIn || !oauthClientId}
+                                className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-200 dark:border-gray-600"
+                              >
+                                {isSigningIn ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Signing in...
+                                  </>
+                                ) : (
+                                  <>
+                                    <LogIn className="mr-2 h-4 w-4" />
+                                    Sign in with Google
+                                  </>
+                                )}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </FormItem>
+                  )}
+                />
+                {watchAuthMethod !== 'gemini-cli' && (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="apiKey"
+                      render={({ field }) => (
+                        <FormItem className="from-item">
+                          <FormLabel className="col-span-1">
+                            {t("setting.apiKeyLabel")}
+                            <span className="ml-1 text-red-500">*</span>
+                          </FormLabel>
+                          <div className="flex gap-2 items-center">
+                            <div className="flex-1 relative">
+                              <FormControl>
+                                <Input
+                                  type={showApiKey ? "text" : "password"}
+                                  placeholder={t("setting.apiKeyPlaceholder")}
+                                  {...field}
+                                  className="pr-10"
+                                />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                              >
+                                {showApiKey ? (
+                                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <Eye className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </Button>
+                            </div>
+                            {apiKeyValidation.status === 'validating' && (
+                              <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                            )}
+                            {apiKeyValidation.status === 'valid' && (
+                              <Check className="h-5 w-5 text-green-500" />
+                            )}
+                            {apiKeyValidation.status === 'invalid' && (
+                              <AlertTriangle className="h-5 w-5 text-red-500" />
+                            )}
+                          </div>
+                          {apiKeyValidation.status === 'valid' && (
+                            <Alert variant="success" className="mt-2 bg-green-50 text-green-700 border-green-200">
+                              <AlertDescription className="text-xs">
+                                {apiKeyValidation.message}
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          {apiKeyValidation.status === 'invalid' && (
+                            <Alert variant="destructive" className="mt-2">
+                              <AlertDescription className="text-xs">
+                                {apiKeyValidation.message}
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="apiProxy"
+                      render={({ field }) => (
+                        <FormItem className="from-item">
+                          <FormLabel className="col-span-1">
+                            {t("setting.apiUrlLabel")}
+                          </FormLabel>
+                          <FormControl className="col-span-3">
                             <Input
-                              type={showApiKey ? "text" : "password"}
-                              placeholder={t("setting.apiKeyPlaceholder")}
+                              placeholder="https://generativelanguage.googleapis.com"
                               {...field}
-                              className="pr-10"
                             />
                           </FormControl>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                            onClick={() => setShowApiKey(!showApiKey)}
-                          >
-                            {showApiKey ? (
-                              <EyeOff className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <Eye className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </Button>
-                        </div>
-                        {apiKeyValidation.status === 'validating' && (
-                          <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                        )}
-                        {apiKeyValidation.status === 'valid' && (
-                          <Check className="h-5 w-5 text-green-500" />
-                        )}
-                        {apiKeyValidation.status === 'invalid' && (
-                          <AlertTriangle className="h-5 w-5 text-red-500" />
-                        )}
-                      </div>
-                      {apiKeyValidation.status === 'valid' && (
-                        <Alert variant="success" className="mt-2 bg-green-50 text-green-700 border-green-200">
-                          <AlertDescription className="text-xs">
-                            {apiKeyValidation.message}
-                          </AlertDescription>
-                        </Alert>
+                        </FormItem>
                       )}
-                      {apiKeyValidation.status === 'invalid' && (
-                        <Alert variant="destructive" className="mt-2">
-                          <AlertDescription className="text-xs">
-                            {apiKeyValidation.message}
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="apiProxy"
-                  render={({ field }) => (
-                    <FormItem className="from-item">
-                      <FormLabel className="col-span-1">
-                        {t("setting.apiUrlLabel")}
-                      </FormLabel>
-                      <FormControl className="col-span-3">
-                        <Input
-                          placeholder="https://generativelanguage.googleapis.com"
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                    />
+                  </>
+                )}
               </TabsContent>
               <TabsContent className="space-y-4" value="server">
                 <FormField

@@ -2,10 +2,13 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { DEFAULT_THINKING_MODEL, DEFAULT_SEARCH_MODEL } from "@/constants/models";
 
+export type AuthMethod = 'api-key' | 'gemini-cli';
+
 export interface SettingStore {
   apiKey: string;
   apiProxy: string;
   accessPassword: string;
+  authMethod: AuthMethod;
   thinkingModel: string;
   networkingModel: string;
   searchModel: string;
@@ -21,6 +24,7 @@ export const defaultValues = {
   apiKey: "",
   apiProxy: "https://generativelanguage.googleapis.com",
   accessPassword: "",
+  authMethod: "api-key" as AuthMethod,
   thinkingModel: DEFAULT_THINKING_MODEL,
   networkingModel: DEFAULT_THINKING_MODEL,
   searchModel: DEFAULT_SEARCH_MODEL,
