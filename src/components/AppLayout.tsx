@@ -139,7 +139,7 @@ function AppSidebar() {
         </div>
       </SidebarBody>
 
-      <SidebarFooter className="border-t border-zinc-800 !px-3 !py-3">
+      <SidebarFooter className="border-t border-zinc-800 !px-0 !py-3">
         <div className="flex flex-col gap-1">
           <button
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
