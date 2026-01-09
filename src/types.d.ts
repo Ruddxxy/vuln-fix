@@ -39,6 +39,18 @@ export interface ResearchHistory {
   articleType?: "news" | "feature" | "investigative" | "explainer";
 }
 
+export type SessionStatus = "in_progress" | "completed" | "paused";
+export type SessionPhase = "questions" | "research" | "writing" | "complete";
+
+export interface ResearchSession extends ResearchHistory {
+  status: SessionStatus;
+  currentPhase: SessionPhase;
+  parentSessionId?: string; // for branched research sessions
+  timeline?: TimelineEvent[];
+  biasScore?: number | null;
+  triangulatedClaims?: TriangulatedClaim[];
+}
+
 export interface PartialJson {
   value: JSONValue | undefined;
   state:

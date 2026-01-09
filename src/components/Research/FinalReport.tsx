@@ -16,7 +16,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useTaskStore } from "@/store/task";
 import { getSystemPrompt } from "@/utils/deep-research";
-import { downloadFile, exportAsJSON, exportAsHTML, exportAsPlainText, ExportData } from "@/utils/file";
+import { downloadFile, exportAsJSON, exportAsHTML, exportAsPlainText, ExportData, exportResearchPackage, exportCitations } from "@/utils/file";
+import { verifyClaimsWithGemini, getVerificationSummary, ClaimVerification } from "@/utils/claim-verification";
 import { Badge } from "@/components/ui/badge";
 import { 
   Select,
@@ -81,6 +82,7 @@ function FinalReport() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [contentWarnings, setContentWarnings] = useState<ContentWarning[]>([]);
   const [neutralizedText, setNeutralizedText] = useState<string>('');
+  const [isAutoVerifying, setIsAutoVerifying] = useState(false);
 
   const articleTypeLabels = {
     news: {
@@ -196,6 +198,79 @@ function FinalReport() {
     setSelectedClaimId(claim.id);
     setIsDialogOpen(true);
   };
+
+  // Auto-verify claims using Gemini
+  async function handleAutoVerifyClaims() {
+    if (!taskStore.finalReport || taskStore.finalReport.trim().length === 0) {
+      toast.error("No article content to verify");
+      return;
+    }
+
+    if (taskStore.sources.length === 0 && taskStore.tasks.length === 0) {
+      toast.error("No sources or learnings available for verification");
+      return;
+    }
+
+    setIsAutoVerifying(true);
+
+    try {
+      const { apiKey, apiProxyUrl } = useSettingStore.getState();
+
+      if (!apiKey) {
+        toast.error("API key is required for claim verification");
+        return;
+      }
+
+      // Get learnings from tasks
+      const learnings = taskStore.tasks
+        .filter((t) => t.state === "completed" && t.learning)
+        .map((t) => t.learning);
+
+      toast.info("Analyzing article and verifying claims...", { duration: 3000 });
+
+      const verifiedClaims = await verifyClaimsWithGemini(
+        taskStore.finalReport,
+        taskStore.sources,
+        learnings,
+        {
+          apiKey,
+          baseURL: apiProxyUrl || "/api/ai/google/v1beta",
+        }
+      );
+
+      if (verifiedClaims.length === 0) {
+        toast.warning("No factual claims could be extracted from the article");
+        return;
+      }
+
+      // Convert verified claims to the Claim format used by the component
+      const newClaims: Claim[] = verifiedClaims.map((vc: ClaimVerification, idx) => ({
+        id: `auto-${Date.now()}-${idx}`,
+        text: vc.claim,
+        status: vc.status as VerificationStatus,
+        details: vc.evidence.length > 0
+          ? `Confidence: ${vc.confidence}% | Evidence: ${vc.evidence.map(e =>
+              `${e.supports ? '✓' : '✗'} ${e.excerpt.substring(0, 100)}${e.excerpt.length > 100 ? '...' : ''}`
+            ).join('; ')}`
+          : `Confidence: ${vc.confidence}%`
+      }));
+
+      // Replace existing claims with auto-verified ones
+      setClaims(newClaims);
+
+      // Show summary
+      const summary = getVerificationSummary(verifiedClaims);
+      toast.success(
+        `Verified ${summary.total} claims: ${summary.verified} verified, ${summary.disputed} disputed, ${summary.unverified} unverified, ${summary.false} false. Verification rate: ${summary.verificationRate}%`,
+        { duration: 5000 }
+      );
+    } catch (error) {
+      console.error("Auto-verification failed:", error);
+      toast.error("Failed to verify claims. Please try again.");
+    } finally {
+      setIsAutoVerifying(false);
+    }
+  }
 
   async function handleDownloadPDF() {
     const originalTitle = document.title;
@@ -709,13 +784,14 @@ function FinalReport() {
           />
         )}
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="mb-2">
-              <MessageSquare className="mr-2 h-4 w-4" />
-              {selectedClaimId ? "Edit Claim" : "Add Verified Claim"}
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2 mb-2">
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MessageSquare className="mr-2 h-4 w-4" />
+                {selectedClaimId ? "Edit Claim" : "Add Claim"}
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{selectedClaimId ? "Edit Claim" : "Add Verified Claim"}</DialogTitle>
@@ -781,7 +857,36 @@ function FinalReport() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="default"
+                  size="sm"
+                  disabled={isAutoVerifying || !taskStore.finalReport}
+                  onClick={handleAutoVerifyClaims}
+                >
+                  {isAutoVerifying ? (
+                    <>
+                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Radar className="mr-2 h-4 w-4" />
+                      Auto-verify Claims
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Use AI to automatically extract and verify factual claims from your article</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+
         {claims.length > 0 && (
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Verified Claims</h4>
