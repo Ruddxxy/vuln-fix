@@ -21,7 +21,6 @@ import {
   NavbarSection,
   NavbarSpacer,
   NavbarItem,
-  NavbarLabel,
 } from "@/components/catalyst"
 import {
   Search,
@@ -32,7 +31,6 @@ import {
   Sun,
   Moon,
   Plus,
-  Clock,
   Newspaper,
 } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -52,7 +50,6 @@ function AppSidebar() {
   const { t } = useTranslation()
   const { setOpenSetting, setOpenHistory } = useGlobalStore()
   const historyStore = useHistoryStore()
-  const taskStore = useTaskStore()
   const { theme, setTheme } = useTheme()
 
   const recentHistory = Object.entries(historyStore.history)
@@ -75,86 +72,90 @@ function AppSidebar() {
   }
 
   return (
-    <Sidebar className="bg-zinc-50 dark:bg-zinc-900">
-      <SidebarHeader>
+    <Sidebar className="bg-zinc-900">
+      <SidebarHeader className="border-b border-zinc-800 px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600">
             <Newspaper className="h-5 w-5 text-white" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-zinc-950 dark:text-white">
+          <div className="flex items-baseline gap-2">
+            <span className="text-base font-semibold text-white">
               Deep Journalist
             </span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs text-zinc-500">
               v{VERSION}
             </span>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarBody>
+      <SidebarBody className="px-3 py-4">
         <SidebarSection>
-          <SidebarItem onClick={handleNewResearch}>
-            <Plus data-slot="icon" className="h-5 w-5" />
-            <SidebarLabel>{t("research.common.newResearch")}</SidebarLabel>
+          <SidebarItem onClick={handleNewResearch} className="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Plus data-slot="icon" className="h-4 w-4 text-white" />
+            <SidebarLabel className="text-white font-medium">{t("research.common.newResearch")}</SidebarLabel>
           </SidebarItem>
         </SidebarSection>
 
-        <SidebarDivider />
-
-        <SidebarSection>
-          <SidebarHeading>Recent Research</SidebarHeading>
-          {recentHistory.length > 0 ? (
-            recentHistory.map(([id, item]) => (
-              <SidebarItem key={id} onClick={() => handleLoadHistory(id)}>
-                <FileText data-slot="icon" className="h-5 w-5" />
-                <SidebarLabel>
-                  {item.question?.slice(0, 30) || "Untitled"}
-                  {(item.question?.length || 0) > 30 ? "..." : ""}
-                </SidebarLabel>
-              </SidebarItem>
-            ))
-          ) : (
-            <p className="px-2 text-xs text-zinc-500 dark:text-zinc-400">
-              No recent research
-            </p>
-          )}
-          <SidebarItem onClick={() => setOpenHistory(true)}>
-            <History data-slot="icon" className="h-5 w-5" />
-            <SidebarLabel>View All History</SidebarLabel>
-          </SidebarItem>
-        </SidebarSection>
+        <div className="mt-6">
+          <SidebarHeading className="px-3 text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">
+            Recent Research
+          </SidebarHeading>
+          <SidebarSection>
+            {recentHistory.length > 0 ? (
+              recentHistory.map(([id, item]) => (
+                <SidebarItem key={id} onClick={() => handleLoadHistory(id)} className="rounded-lg">
+                  <FileText data-slot="icon" className="h-4 w-4 text-zinc-400" />
+                  <SidebarLabel className="text-zinc-300">
+                    {item.question?.slice(0, 28) || "Untitled"}
+                    {(item.question?.length || 0) > 28 ? "..." : ""}
+                  </SidebarLabel>
+                </SidebarItem>
+              ))
+            ) : (
+              <p className="px-3 py-2 text-sm text-zinc-500">
+                No recent research
+              </p>
+            )}
+            <SidebarItem onClick={() => setOpenHistory(true)} className="rounded-lg">
+              <History data-slot="icon" className="h-4 w-4 text-zinc-400" />
+              <SidebarLabel className="text-zinc-300">View All History</SidebarLabel>
+            </SidebarItem>
+          </SidebarSection>
+        </div>
 
         <SidebarSpacer />
 
-        <SidebarSection>
-          <SidebarHeading>Status</SidebarHeading>
-          <div className="px-2">
+        <div className="mt-6">
+          <SidebarHeading className="px-3 text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">
+            Status
+          </SidebarHeading>
+          <div className="px-3 py-2 rounded-lg bg-zinc-800/50">
             <RateLimitStatus />
             <div className="mt-2">
               <ConnectionStatusIndicator />
             </div>
           </div>
-        </SidebarSection>
+        </div>
       </SidebarBody>
 
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-zinc-800 px-3 py-3">
         <SidebarSection>
-          <SidebarItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+          <SidebarItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-lg">
             {theme === 'dark' ? (
-              <Sun data-slot="icon" className="h-5 w-5" />
+              <Sun data-slot="icon" className="h-4 w-4 text-zinc-400" />
             ) : (
-              <Moon data-slot="icon" className="h-5 w-5" />
+              <Moon data-slot="icon" className="h-4 w-4 text-zinc-400" />
             )}
-            <SidebarLabel>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</SidebarLabel>
+            <SidebarLabel className="text-zinc-300">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</SidebarLabel>
           </SidebarItem>
-          <SidebarItem onClick={() => setOpenSetting(true)}>
-            <Settings data-slot="icon" className="h-5 w-5" />
-            <SidebarLabel>{t("setting.title")}</SidebarLabel>
+          <SidebarItem onClick={() => setOpenSetting(true)} className="rounded-lg">
+            <Settings data-slot="icon" className="h-4 w-4 text-zinc-400" />
+            <SidebarLabel className="text-zinc-300">{t("setting.title")}</SidebarLabel>
           </SidebarItem>
-          <SidebarItem href="https://github.com/CaullenOmdahl/deep-journalist">
-            <Github data-slot="icon" className="h-5 w-5" />
-            <SidebarLabel>GitHub</SidebarLabel>
+          <SidebarItem href="https://github.com/CaullenOmdahl/deep-journalist" className="rounded-lg">
+            <Github data-slot="icon" className="h-4 w-4 text-zinc-400" />
+            <SidebarLabel className="text-zinc-300">GitHub</SidebarLabel>
           </SidebarItem>
         </SidebarSection>
       </SidebarFooter>
@@ -163,7 +164,6 @@ function AppSidebar() {
 }
 
 function AppNavbar() {
-  const { t } = useTranslation()
   const taskStore = useTaskStore()
 
   return (
@@ -174,7 +174,7 @@ function AppNavbar() {
           <Search data-slot="icon" className="h-5 w-5" />
         </NavbarItem>
         {taskStore.question && (
-          <span className="text-sm text-zinc-600 dark:text-zinc-400 truncate max-w-[200px]">
+          <span className="text-sm text-zinc-400 truncate max-w-[200px]">
             {taskStore.question.slice(0, 40)}...
           </span>
         )}
