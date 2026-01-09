@@ -507,7 +507,11 @@ export default function StoryTracker({ finalReport = "" }: StoryTrackerProps) {
             
             <Select
               value={activeStory.tracking.updateFrequency}
-              onValueChange={(value) => handleUpdateFrequency(value as any)}
+              onValueChange={(value: string) => {
+                if (value === 'hourly' || value === 'daily' || value === 'weekly') {
+                  handleUpdateFrequency(value);
+                }
+              }}
             >
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Check frequency" />

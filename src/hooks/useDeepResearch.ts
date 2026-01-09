@@ -13,12 +13,9 @@ import {
   getSystemPrompt,
   getOutputGuidelinesPrompt,
   generateQuestionsPrompt,
-  generateSerpQueriesPrompt,
   generateJournalisticQueriesPrompt,
-  processSearchResultPrompt,
   processJournalisticSearchResultPrompt,
   reviewSerpQueriesPrompt,
-  writeFinalReportPrompt,
   writeJournalisticArticlePrompt,
   getSERPQuerySchema,
 } from "@/utils/deep-research";

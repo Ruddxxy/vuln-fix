@@ -255,42 +255,6 @@ function getDefaultUserMessageForError(error: Error): string {
   return "An unexpected error occurred. Please try again.";
 }
 
-// Create recovery mechanisms for common errors
-export function recoverFromError(error: AppError | JournalistError): (() => Promise<void>) | null {
-  // Return a recovery function based on error type
-  switch (error.type) {
-    case ErrorType.NETWORK:
-      return async () => {
-        // Attempt to reconnect or retry the request
-        toast.info("Attempting to reconnect...");
-        // Logic would depend on the specific API or operation
-      };
-    
-    case ErrorType.RATE_LIMIT:
-      return async () => {
-        // Wait appropriate time and retry
-        const waitTime = typeof error.context?.waitTimeMs === 'number' 
-          ? error.context.waitTimeMs 
-          : 5000;
-          
-        toast.info(`Waiting ${Math.ceil(waitTime/1000)} seconds before retrying...`);
-        
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        // Retry logic would depend on the specific API or operation
-      };
-      
-    case ErrorType.AUTH:
-      return async () => {
-        // Prompt user to update API key or credentials
-        toast.info("Please update your API key in settings");
-        // Could trigger settings dialog or authentication flow
-      };
-      
-    default:
-      // No automated recovery available
-      return null;
-  }
-}
 
 // Function to format error message for API response
 export function formatErrorResponse(error: unknown): { message: string; code?: number | string; details?: unknown } {

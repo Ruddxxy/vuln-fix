@@ -206,34 +206,6 @@ export function generateJournalisticQueriesPrompt(query: string, inputType: stri
   ].join("\n\n");
 }
 
-export function generateSerpQueriesPrompt(query: string) {
-  const SERPQuerySchema = getSERPQuerySchema();
-  const outputSchema = schemaToJsonString(SERPQuerySchema);
-
-  return [
-    `Given the following query from the user:\n<query>${query}</query>`,
-    `Based on previous user query, generate a list of SERP queries to further research the topic for journalistic reporting. Make sure each query is unique and targets different aspects of the story.`,
-    `You MUST respond in \`JSON\` matching this \`JSON schema\`:\n\`\`\`json\n${outputSchema}\n\`\`\``,
-    `Expected output:\n\`\`\`json\n[{query: "This is a sample query. ", researchGoal: "This is the reason for the query. "}]\n\`\`\``,
-  ].join("\n\n");
-}
-
-export function processSearchResultPrompt(query: string, researchGoal: string) {
-  return [
-    `Please use the following query to get the latest information via google search tool:\n<query>${query}</query>`,
-    `You need to organize the searched information according to the following requirements:\n<researchGoal>\n${researchGoal}\n</researchGoal>`,
-    `You need to think like a professional journalist conducting research. Generate a list of key findings from the search results that adhere to journalistic standards. For each source you find:
-    
-1. Evaluate its credibility and potential bias
-2. Classify it as primary, secondary, official, analysis, or commentary
-3. Note the publication date and author/publisher when available
-4. Extract factual information, distinguishing between verified facts and claims/allegations
-5. Identify conflicting accounts and different perspectives
-
-Make sure each finding is unique, detailed, and information-dense. Include relevant quotes with proper attribution. The findings will be used to craft a balanced journalistic article.`,
-  ].join("\n\n");
-}
-
 export function processJournalisticSearchResultPrompt(query: string, researchGoal: string) {
   const SourceSchema = getSourceSchema();
   const outputSchema = schemaToJsonString(SourceSchema);
@@ -280,17 +252,6 @@ export function reviewSerpQueriesPrompt(
 Make sure each query is unique and not similar to each other. If you believe no further research is needed for comprehensive coverage, you can output an empty queries array.`,
     `You MUST respond in \`JSON\` matching this \`JSON schema\`: \n\`\`\`json\n${outputSchema}\n\`\`\``,
     `Expected output:\n\`\`\`json\n[{query: "This is a sample query. ", researchGoal: "This is the reason for the query. "}]\n\`\`\``,
-  ].join("\n\n");
-}
-
-export function writeFinalReportPrompt(query: string, learnings: string[]) {
-  const learningsString = learnings
-    .map((learning) => `<learning>\n${learning}\n</learning>`)
-    .join("\n");
-  return [
-    `Given the following query from the user, write a final report on the topic using the learnings from research. Make it as detailed as possible, aim for 3 or more pages, include ALL the learnings from research:\n<query>${query}</query>`,
-    `Here are all the learnings from previous research:\n<learnings>\n${learningsString}\n</learnings>`,
-    `You need to write this report like a professional researcher. Contains diverse data information such as table, katex formulas, mermaid diagrams, etc. in the form of markdown syntax. **DO NOT** output anything other than report.`,
   ].join("\n\n");
 }
 

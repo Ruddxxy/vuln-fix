@@ -350,13 +350,19 @@ function generateOverallSuggestions(
 ): string[] {
   const suggestions: string[] = [];
   
-  // Group phrases by type
-  const phrasesByType: Record<BiasType, BiasedPhrase[]> = {} as any;
-  
+  // Group phrases by type - initialize with all BiasType keys as empty arrays
+  const phrasesByType: Record<BiasType, BiasedPhrase[]> = {
+    'political': [],
+    'loaded-language': [],
+    'labeling': [],
+    'false-equivalence': [],
+    'passive-construction': [],
+    'framing': [],
+    'subjective-qualifier': [],
+    'generalization': []
+  };
+
   biasedPhrases.forEach(phrase => {
-    if (!phrasesByType[phrase.type]) {
-      phrasesByType[phrase.type] = [];
-    }
     phrasesByType[phrase.type].push(phrase);
   });
   
