@@ -101,7 +101,7 @@ function AppSidebar() {
           <SidebarHeading className="px-3 text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">
             Recent Research
           </SidebarHeading>
-          <SidebarSection>
+          <SidebarSection className="[&_button]:justify-start [&_a]:justify-start">
             {recentHistory.length > 0 ? (
               recentHistory.map(([id, item]) => (
                 <SidebarItem key={id} onClick={() => handleLoadHistory(id)} className="rounded-lg">
@@ -140,7 +140,7 @@ function AppSidebar() {
       </SidebarBody>
 
       <SidebarFooter className="border-t border-zinc-800 px-3 py-3">
-        <SidebarSection>
+        <SidebarSection className="[&_button]:justify-start [&_a]:justify-start">
           <SidebarItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-lg">
             {theme === 'dark' ? (
               <Sun data-slot="icon" className="h-4 w-4 text-zinc-400" />
