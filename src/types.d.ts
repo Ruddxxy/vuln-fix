@@ -47,3 +47,17 @@ export interface PartialJson {
   | "repaired-parse"
   | "failed-parse";
 }
+
+export interface TimelineEvent {
+  date: string;
+  event: string;
+  sources: string[]; // source IDs
+}
+
+export interface TriangulatedClaim {
+  claim: string;
+  supportingSources: string[]; // source IDs
+  conflictingSources: string[]; // source IDs
+  confidenceScore: number; // 0-100
+  status: 'confirmed' | 'disputed' | 'single-source' | 'unverified';
+}

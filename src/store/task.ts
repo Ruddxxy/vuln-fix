@@ -14,6 +14,9 @@ export interface TaskStore {
   sources: Source[];
   feedback: string;
   articleType: "news" | "feature" | "investigative" | "explainer";
+  timeline: TimelineEvent[];
+  biasScore: number | null; // 0-100, null if not analyzed
+  triangulatedClaims: TriangulatedClaim[];
 }
 
 type TaskFunction = {
@@ -30,6 +33,9 @@ type TaskFunction = {
   setSources: (sources: Source[]) => void;
   setFeedback: (feedback: string) => void;
   setArticleType: (articleType: "news" | "feature" | "investigative" | "explainer") => void;
+  setTimeline: (timeline: TimelineEvent[]) => void;
+  setBiasScore: (score: number | null) => void;
+  setTriangulatedClaims: (claims: TriangulatedClaim[]) => void;
   clear: () => void;
   reset: () => void;
   backup: () => TaskStore;
@@ -48,6 +54,9 @@ const defaultValues: TaskStore = {
   sources: [],
   feedback: "",
   articleType: "news",
+  timeline: [],
+  biasScore: null,
+  triangulatedClaims: [],
 };
 
 export const useTaskStore = create(
@@ -102,6 +111,9 @@ export const useTaskStore = create(
       },
       setFeedback: (feedback) => set(() => ({ feedback })),
       setArticleType: (articleType) => set(() => ({ articleType })),
+      setTimeline: (timeline) => set(() => ({ timeline })),
+      setBiasScore: (biasScore) => set(() => ({ biasScore })),
+      setTriangulatedClaims: (triangulatedClaims) => set(() => ({ triangulatedClaims })),
       clear: () => set(() => ({ tasks: [] })),
       reset: () => set(() => ({ ...defaultValues })),
       backup: () => {

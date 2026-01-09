@@ -111,6 +111,8 @@
     "networkingModel": "联网模型",
     "searchModel": "搜索模型",
     "searchModelDescription": "用于并行网页搜索的模型（RPM越高 = 越快）",
+    "researchDepth": "研究深度",
+    "researchDepthDescription": "后续研究轮数（越高 = 越深入但越慢）",
     "language": "界面语言",
     "refresh": "点击刷新模型",
     "save": "保存",

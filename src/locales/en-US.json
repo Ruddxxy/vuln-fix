@@ -111,6 +111,8 @@
     "networkingModel": "Networking Model",
     "searchModel": "Search Model",
     "searchModelDescription": "Model used for parallel web searches (higher RPM = faster)",
+    "researchDepth": "Research Depth",
+    "researchDepthDescription": "Number of follow-up research rounds (higher = more thorough but slower)",
     "language": "Language",
     "refresh": "Click Refresh Model",
     "save": "Save",

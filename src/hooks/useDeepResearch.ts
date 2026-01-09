@@ -26,6 +26,9 @@ import { parseError } from "@/utils/error";
 import { flat } from "radash";
 import rateLimiter, { isRateLimitError } from "@/utils/rate-limiter";
 import { FALLBACK_ORDER } from "@/constants/models";
+import { buildTimeline } from "@/utils/timeline-builder";
+import { detectBias } from "@/utils/bias-detection";
+import { triangulateClaims } from "@/utils/source-triangulation";
 
 function getResponseLanguagePrompt(lang: string) {
   return `**Respond in ${lang}**`;
@@ -324,10 +327,16 @@ function useDeepResearch() {
     return content;
   }
 
-  async function reviewSearchResult() {
-    const { thinkingModel, language } = useSettingStore.getState();
+  async function reviewSearchResult(currentDepth: number = 0) {
+    const { thinkingModel, language, researchDepth } = useSettingStore.getState();
     const { query, tasks, suggestion } = useTaskStore.getState();
     const modelToUse = getAvailableModel(thinkingModel);
+
+    // Check if we've reached the maximum research depth
+    if (currentDepth >= researchDepth) {
+      logger.info(`Research depth limit reached (${currentDepth}/${researchDepth}), stopping recursive research`);
+      return;
+    }
 
     // Check if model is in cooldown
     if (checkModelCooldown(modelToUse)) {
@@ -379,6 +388,10 @@ function useDeepResearch() {
       if (queries.length > 0) {
         taskStore.update([...tasks, ...queries]);
         await runSearchTask(queries);
+
+        // Recursive call for deeper research
+        logger.info(`Completed research depth ${currentDepth + 1}, continuing to depth ${currentDepth + 2}`);
+        await reviewSearchResult(currentDepth + 1);
       }
     } catch (error) {
       if (isRateLimitError(error)) {
@@ -580,21 +593,78 @@ function useDeepResearch() {
         .replaceAll("#", "")
         .replaceAll("**", "")
         .trim();
-      
+
       logger.info("Setting report title:", title);
       setTitle(title);
-      
+
       const sources = flat(
         tasks.map((item) => (item.sources ? item.sources : []))
       );
-      
+
       logger.info("Setting sources count:", sources.length);
       setSources(sources);
-      
+
+      // Phase 2: Integrate analysis utilities
+      const { apiKey } = useSettingStore.getState();
+      const { setTimeline, setBiasScore, setTriangulatedClaims } = useTaskStore.getState();
+      const learnings = tasks.map((item) => item.learning).filter(Boolean);
+
+      // Build timeline from tasks
+      logger.info("Building timeline from research tasks...");
+      try {
+        const timeline = buildTimeline(tasks, content);
+        if (timeline.events.length > 0) {
+          // Convert to the simplified format for storage
+          const timelineEvents = timeline.events.map(event => ({
+            date: event.date.toISOString().split('T')[0],
+            event: event.title,
+            sources: event.sourceId ? [event.sourceId] : []
+          }));
+          setTimeline(timelineEvents);
+          logger.info(`Timeline built with ${timelineEvents.length} events`);
+        }
+      } catch (timelineError) {
+        logger.warn("Timeline building failed (non-critical):", timelineError);
+      }
+
+      // Run bias detection on the final report
+      logger.info("Running bias detection on final report...");
+      try {
+        const biasResult = detectBias(content);
+        setBiasScore(biasResult.biasScore);
+        logger.info(`Bias score: ${biasResult.biasScore}, severity: ${biasResult.severity}`);
+
+        if (biasResult.biasScore > 30) {
+          toast.warning(`Bias detected (score: ${Math.round(biasResult.biasScore)}). Consider reviewing flagged phrases.`);
+        }
+      } catch (biasError) {
+        logger.warn("Bias detection failed (non-critical):", biasError);
+      }
+
+      // Triangulate claims across sources
+      if (apiKey && sources.length >= 2 && learnings.length > 0) {
+        logger.info("Triangulating claims across sources...");
+        try {
+          const triangulatedClaims = await triangulateClaims(learnings, sources, { apiKey });
+          if (triangulatedClaims.length > 0) {
+            setTriangulatedClaims(triangulatedClaims);
+            logger.info(`Triangulated ${triangulatedClaims.length} claims`);
+
+            // Count disputed claims for warning
+            const disputedCount = triangulatedClaims.filter(c => c.status === 'disputed').length;
+            if (disputedCount > 0) {
+              toast.info(`${disputedCount} claim(s) have conflicting sources. Review triangulation data.`);
+            }
+          }
+        } catch (triangulationError) {
+          logger.warn("Source triangulation failed (non-critical):", triangulationError);
+        }
+      }
+
       const id = save(taskStore.backup());
       logger.info("Saving report with ID:", id);
       setId(id);
-      
+
       toast.success("Report generated successfully!");
       return content;
     } catch (error) {

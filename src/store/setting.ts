@@ -9,6 +9,7 @@ export interface SettingStore {
   thinkingModel: string;
   networkingModel: string;
   searchModel: string;
+  researchDepth: number;
   language: string;
 }
 
@@ -23,6 +24,7 @@ export const defaultValues = {
   thinkingModel: DEFAULT_THINKING_MODEL,
   networkingModel: DEFAULT_THINKING_MODEL,
   searchModel: DEFAULT_SEARCH_MODEL,
+  researchDepth: 2,
   language: "",
 };
 

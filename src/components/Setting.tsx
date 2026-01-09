@@ -54,6 +54,7 @@ const formSchema = z.object({
   thinkingModel: z.string(),
   networkingModel: z.string(),
   searchModel: z.string(),
+  researchDepth: z.number().min(1).max(3),
   language: z.string().optional(),
 });
 
@@ -91,6 +92,7 @@ function Setting({ open, onClose }: SettingProps) {
           thinkingModel: state.thinkingModel || '',
           networkingModel: state.networkingModel || '',
           searchModel: state.searchModel || 'gemini-2.0-flash-lite',
+          researchDepth: state.researchDepth || 2,
           language: state.language || 'en-US',
         };
         
@@ -551,6 +553,38 @@ function Setting({ open, onClose }: SettingProps) {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {t("setting.searchModelDescription")}
+                      </p>
+                    </div>
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="researchDepth"
+              render={({ field }) => (
+                <FormItem className="from-item">
+                  <FormLabel className="col-span-1">
+                    {t("setting.researchDepth")}
+                  </FormLabel>
+                  <FormControl>
+                    <div className="col-span-3 flex flex-col gap-1">
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="range"
+                          min={1}
+                          max={3}
+                          step={1}
+                          value={field.value}
+                          onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                        />
+                        <span className="text-sm font-medium w-6 text-center">
+                          {field.value}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {t("setting.researchDepthDescription")}
                       </p>
                     </div>
                   </FormControl>
